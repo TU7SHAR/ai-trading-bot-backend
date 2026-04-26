@@ -1,29 +1,37 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from processor import market_processor
 import asyncio
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
-    # Start the background processor loop
-    asyncio.create_task(market_processor.process_loop())
-    
-    # Fill queue with initial "Idle" stocks (e.g., Silver)
-    await market_processor.add_request("TATSILV", priority=2)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start background task
+    task = asyncio.create_task(market_processor.process_loop())
+  await market_processor.add_request(Config.VIX_SYMBOL, priority=2)    await market_processor.add_request("TATSILV", priority=2)
     await market_processor.add_request("SILVERBEES", priority=2)
+    yield
+    # Shutdown: Stop loop
+    market_processor.is_running = False
+    await task
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/track/{symbol}")
 async def track_stock_live(symbol: str):
-    # User requested this -> Priority 1
     await market_processor.add_request(symbol.upper(), priority=1)
-    return {"status": "Priority request added", "symbol": symbol}
+    return {"status": "Priority tracking started", "symbol": symbol}
 
 @app.get("/brain/analyze/{symbol}")
 async def analyze_stock(symbol: str):
-    await market_processor.add_request(symbol.upper(), priority=1)    
-    await asyncio.sleep(1)    
-    from brain import get_ai_decision
-    decision = get_ai_decision(symbol.upper())
+    # This triggers an immediate sentiment check
+    from brain import fingpt
+    # In a real scenario, you'd fetch news here. 
+    # For now, we analyze the 'vibe' or latest headline
+    sentiment = fingpt.get_sentiment(f"Latest market movement for {symbol}")
     
-    return {"symbol": symbol, "ai_analysis": decision}
+    decision = "BUY" if sentiment > 0.3 else "SELL" if sentiment < -0.3 else "HOLD"
+    return {
+        "symbol": symbol,
+        "sentiment_score": sentiment,
+        "recommendation": decision
+    }

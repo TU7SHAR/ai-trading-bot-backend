@@ -16,4 +16,5 @@ class Config:
     
     # Trading Constants
     DEFAULT_EXCHANGE = "NSE"
-    SILVER_SYMBOL = "TATSILV" 
+    SILVER_SYMBOL = "TATSILV"
+    VIX_SYMBOL = "India VIX"
